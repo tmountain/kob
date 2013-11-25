@@ -1,0 +1,100 @@
+#!/usr/bin/ruby
+
+TIME_WINDOW = 60
+MINUTES_PER_DAY = 1440
+
+def get_historical_dataset(file)
+  results = []
+  fh = File.new(file)
+  while line = fh.gets
+    line.chomp!
+    data = line.split(',')
+    results << {
+      :unix_time => data[0].to_i,
+      :price => data[1].to_f,
+      :quantity => data[2].to_f
+    }
+  end
+  results
+end
+
+def bucket_historical_data(data)
+  results = {}
+  first_result = nil
+  last_result = nil
+  final_results = {}
+
+  data.each do |value|
+    epoch_time = Time.at(value[:unix_time])
+    date_key = Time.mktime(epoch_time.year,
+                           epoch_time.month,
+                           epoch_time.day,
+                           epoch_time.hour,
+                           epoch_time.min, 0).to_i
+    first_result = first_result ? first_result : date_key
+    results[date_key] ||= []
+    results[date_key] << value
+    last_result = date_key
+  end
+
+  current_result = first_result
+
+  begin
+    # ensure that if there's only one result, everything else will equal that
+    if not results.has_key?(current_result)
+      final_results[current_result] = {:quantity => 0.0,
+                                       :price => final_results[current_result - TIME_WINDOW][:price]}
+    else
+      total_price = results[current_result].map {|sale| sale[:price]}.inject{|sum,x| sum + x }
+      total_qty = results[current_result].map {|sale| sale[:quantity]}.inject{|sum,x| sum + x }
+      avg_price = total_price / results[current_result].count
+      final_results[current_result] = { :quantity => total_qty, :price => avg_price }
+    end
+
+    current_result += TIME_WINDOW
+  end while current_result <= last_result
+  # TODO: calculate the last result here
+  return final_results
+end
+
+def slice_data(data, start, finish)
+  result = []
+
+  data.each do |value|
+    if value[:unix_time] >= start and
+       value[:unix_time] <= finish
+      result << value
+    end
+  end
+
+  return result
+end
+
+# takes days for time period
+def ema(time_series, data, time_period)
+  time_period *= MINUTES_PER_DAY
+  k = 2.0 / (time_period + 1)
+  emas = {}
+
+  time_series.each do |minute|
+    result = data[minute]
+    if emas.empty?
+      emas[minute] = result[:price]
+    else
+      emas[minute] = k * result[:price] + emas[minute-TIME_WINDOW]*(1-k)
+    end
+  end
+
+  return emas
+end
+
+data = get_historical_dataset("data/cbxUSD.csv")
+
+minute_averages = bucket_historical_data(data)
+time_series = minute_averages.keys.sort
+
+ema_10 = ema(time_series, minute_averages, 10)
+
+time_series.each do |minute|
+  puts "#{Time.at(minute)}, #{minute}, #{ema_10[minute]}, #{minute_averages[minute][:price]}"
+end
