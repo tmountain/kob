@@ -94,7 +94,8 @@ minute_averages = bucket_historical_data(data)
 time_series = minute_averages.keys.sort
 
 ema_10 = ema(time_series, minute_averages, 10)
+ema_21 = ema(time_series, minute_averages, 21)
 
 time_series.each do |minute|
-  puts "#{Time.at(minute)}, #{minute}, #{ema_10[minute]}, #{minute_averages[minute][:price]}"
+  puts "#{Time.at(minute)}, #{minute}, #{ema_10[minute]}, #{ema_21[minute]}, #{minute_averages[minute][:price]}"
 end

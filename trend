@@ -1,0 +1,45 @@
+#!/usr/bin/ruby
+
+fh = File.new('/tmp/data.txt', 'r')
+
+fudge = 0.0
+last_crossover = nil
+transactions = 0
+market_price = 0.0
+current_value = 0.0
+coins = 0.0 # start with 0 coins
+acct_bal = 100.0
+
+while line = fh.gets
+  line.chomp!
+  fields = line.split(',').map { |item| item.strip }
+  date, time, ema_10, ema_21, price = fields
+  market_price = price.to_f
+
+  # sell when the 10 day EMA is crossing down over the 21 day EMA
+  if ema_10.to_f < (ema_21.to_f + fudge) and (last_crossover == nil or last_crossover == :up)
+    last_crossover = :down
+    sell_amt = 100.0 / price.to_f
+    acct_bal += 100
+    transactions += 1
+    coins -= sell_amt
+    current_value = (coins * market_price)
+    puts "<#{date}> SELL #{sprintf('%3.02f', sell_amt)} coins price=$#{price.to_f} holding_btc = #{sprintf('%3.02f', coins)} btc_value = $#{sprintf('%3.02f', current_value)} acct_bal = $#{acct_bal}"
+  end
+
+  # buy when the 10 day EMA is crossing up over the 21 day EMA
+  if ema_10.to_f > (ema_21.to_f + fudge) and (last_crossover == nil or last_crossover == :down)
+    last_crossover = :up
+    buy_amt = 100.0 / price.to_f
+    acct_bal -= 100
+    transactions += 1
+    coins += buy_amt
+    current_value = (coins * market_price)
+    puts "<#{date}> BUY  #{sprintf('%3.02f', buy_amt)} coins price=$#{price.to_f} holding_btc = #{sprintf('%3.02f', coins)} btc_value = $#{sprintf('%3.02f', current_value)} acct_bal = $#{acct_bal}"
+  end
+
+end
+
+puts "#{transactions} transactions, final coins = #{coins}, market value = $#{current_value}"
+
+fh.close
